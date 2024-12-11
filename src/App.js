@@ -1,9 +1,7 @@
-import CarDemo from "./CarDemo";
+import { CarDemo } from "./CarDemo";
 
-function App() {
+export function App() {
   return <div>
     <CarDemo />
   </div>;
 }
-
-export default App;

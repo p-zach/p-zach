@@ -1,9 +1,16 @@
 import { useState, useEffect } from 'react'
 import * as tf from '@tensorflow/tfjs';
-import Canvas from './components/Canvas';
+import { useCanvas } from './components/useCanvas';
+import { CarEnvironment } from './models/car/CarEnvironment';
+import { CarModel } from './models/car/CarModel';
+import { Vector2 } from './models/Vector2';
 
-function CarDemo() {
+export function CarDemo() {
   const [resetKey, setResetKey] = useState(0);
+
+  // model input should be velocity as (forward, sideways) -- normalized with the main forward ray as +x. then 5 rays so 7 total inputs
+  // display best net from previous iteration
+  // or best net currently?
 //   const model = tf.sequential();
 //   model.add(tf.layers.dense({units: 1, inputShape: [1]}));
 
@@ -20,34 +27,53 @@ function CarDemo() {
 //     // Open the browser devtools to see the output
 //   });
 
-  let pos = {x: 100, y: 100};
-  let speed = 3;  
+  // let pos = {x: 100, y: 100};
+  // let speed = 3;
+  
+  let env = new CarEnvironment('/course1.png');
+  let carModel = null;
+  env.on('onFindOrigin', () => { carModel = new CarModel(env.origin); })  
 
-  let loaded = false;
-  const img = new Image();
-  img.onload = () => loaded = true;
-  img.crossOrigin = "Anonymous";
-  // img.src = './course1.png';
-  img.src = 'https://raw.githubusercontent.com/p-zach/self-driving-car/refs/heads/main/course1.png';
+  const carImage = new Image();
+  carImage.crossOrigin = 'Anonymous';
+  carImage.src = '/car40.png';
 
-  let prevPos = pos;
+  let prevFrameTime = 0;
+
+  let keysDown = [false, false, false, false];
 
   useEffect(() => {
-    // Add event listener for key presses
     const handleKeyDown = (event) => {
-      prevPos = {x: pos.x, y: pos.y};
       switch (event.key) {
         case 'ArrowUp':
-          pos.y -= speed;
+          keysDown[0] = true;
           break;
         case 'ArrowDown':
-          pos.y += speed;
+          keysDown[1] = true;
           break;
         case 'ArrowLeft':
-          pos.x -= speed;
+          keysDown[2] = true;
           break;
         case 'ArrowRight':
-          pos.x += speed;
+          keysDown[3] = true;
+          break;
+        default:
+          break;
+      }
+    };
+    const handleKeyUp = (event) => {
+      switch (event.key) {
+        case 'ArrowUp':
+          keysDown[0] = false;
+          break;
+        case 'ArrowDown':
+          keysDown[1] = false;
+          break;
+        case 'ArrowLeft':
+          keysDown[2] = false;
+          break;
+        case 'ArrowRight':
+          keysDown[3] = false;
           break;
         default:
           break;
@@ -55,34 +81,65 @@ function CarDemo() {
     };
 
     window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
     };
   }, []);
 
-  const draw = (ctx, frameCount) => {
-    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height)
-    // ctx.fillStyle = '#DDDDDD'
-    // ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height)
-    
-    if (loaded)
-      ctx.drawImage(img, 0, 0, 1500, 1000);
-    
-    const pixel = ctx.getImageData(pos.x, pos.y, 1, 1).data;
-    if (pixel[0] === 0 && pixel[1] === 0 && pixel[2] === 0)
-      pos = prevPos;
-
-    ctx.fillStyle = '#FF0000'
-    ctx.beginPath()
-    ctx.arc(pos.x, pos.y, 20*Math.sin(frameCount*0.05)**2, 0, 2*Math.PI)
-    ctx.fill()
+  function drawCar(ctx, car) {
+    if (car == null)
+      return;
+    ctx.save();
+    ctx.translate(car.position.x, car.position.y);
+    ctx.rotate(car.heading);
+    ctx.drawImage(carImage, -carImage.width / 2, -carImage.height / 2);
+    ctx.restore();
   }
+
+  const draw = (ctx, frameCount) => {
+    let currFrameTime = Date.now();
+    let delta = (currFrameTime - prevFrameTime) / 1000;
+    prevFrameTime = currFrameTime;
+
+    // Clear canvas
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    
+    let inputVector = Vector2.zero();
+    if (keysDown[0])
+      inputVector.x += 1;
+    if (keysDown[1])
+      inputVector.x -= 1;
+    if (keysDown[2])
+      inputVector.y -= 1;
+    if (keysDown[3])
+      inputVector.y += 1;
+
+    if (carModel != null)
+    {
+      carModel.update(inputVector.x, inputVector.y, delta);
+    }
+    
+    // const pixel = ctx.getImageData(pos.x, pos.y, 1, 1).data;
+    // if (pixel[0] === 255 && pixel[1] === 255 && pixel[2] === 255)
+    //   pos = prevPos;
+
+    env.drawCourse(ctx);
+    drawCar(ctx, carModel);
+
+  }
+
+  const canvasRef = useCanvas(draw)
+
+  const resetSize = () => { canvasRef.width = env.courseImage.width; canvasRef.height = env.courseImage.height; };
+  if (env.courseImage.complete)
+    resetSize();
+  else env.on('onFindOrigin', resetSize);
   
   return <div>
-    <button onClick={() => setResetKey(resetKey + 1)}>Reset</button>
-    <Canvas draw={draw} key={resetKey} width={1500} height={1000}/>
+    {/* <button onClick={() => setResetKey(resetKey + 1)}>Reset</button> */}
+    <canvas ref={canvasRef} key={resetKey} width={800} height={400}/>
   </div>;
 }
-
-export default CarDemo;

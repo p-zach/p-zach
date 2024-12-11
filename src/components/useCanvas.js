@@ -1,7 +1,7 @@
 // https://medium.com/@pdx.lucasm/canvas-with-react-js-32e133c05258
 import { useRef, useEffect } from 'react'
 
-const useCanvas = draw => {
+export const useCanvas = draw => {
   
   const canvasRef = useRef(null)
   
@@ -26,5 +26,3 @@ const useCanvas = draw => {
   
   return canvasRef
 }
-
-export default useCanvas
