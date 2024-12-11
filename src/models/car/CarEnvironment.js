@@ -1,6 +1,9 @@
 import { Vector2 } from "../Vector2";
 import { EventEmitter } from 'events'
 
+export const COURSE_IMAGE_WIDTH = 850;
+export const COURSE_IMAGE_HEIGHT = 450;
+
 export class CarEnvironment extends EventEmitter {
     constructor(courseFileName) {
         super();
@@ -19,15 +22,18 @@ export class CarEnvironment extends EventEmitter {
         };
         this.courseImage.crossOrigin = 'Anonymous';
         this.courseImage.src = courseFileName;
-
-        this.canvas.width = this.courseImage.width;
-        this.canvas.height = this.courseImage.height;
     }
 
     /**
      * Return the origin of the course by finding the red origin pixel.
      */
     findOrigin(ctx) {
+        this.canvas.width = this.courseImage.width;
+        this.canvas.height = this.courseImage.height;
+
+        if (this.courseImage.width !== COURSE_IMAGE_WIDTH || this.courseImage.height !== COURSE_IMAGE_HEIGHT)
+            throw new Error("Course image size must match defined constants");
+
         ctx.drawImage(this.courseImage, 0, 0, this.courseImage.width, this.courseImage.height);
         const { data, width } = ctx.getImageData(0, 0, this.courseImage.width, this.courseImage.height);
 
@@ -63,5 +69,16 @@ export class CarEnvironment extends EventEmitter {
                 context.fillRect(this.origin.x, this.origin.y, 1, 1);
             }
         }
+    }
+
+    /**
+     * @param {Vector2} point The point to check.
+     * @returns True if the point is off of the track, false otherwise.
+     */
+    offTrack(point) {
+        if (point.x < 0 || point.y < 0 || point.x >= this.canvas.width || point.y >= this.canvas.height)
+            return true;
+        const pixel = this.context.getImageData(point.x, point.y, 1, 1).data;
+        return pixel[0] === 255 && pixel[1] === 255 && pixel[2] === 255;
     }
 }

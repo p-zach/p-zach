@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import * as tf from '@tensorflow/tfjs';
 import { useCanvas } from './components/useCanvas';
-import { CarEnvironment } from './models/car/CarEnvironment';
+import { CarEnvironment, COURSE_IMAGE_WIDTH, COURSE_IMAGE_HEIGHT } from './models/car/CarEnvironment';
 import { CarModel } from './models/car/CarModel';
 import { Vector2 } from './models/Vector2';
 
@@ -11,6 +11,7 @@ export function CarDemo() {
   // model input should be velocity as (forward, sideways) -- normalized with the main forward ray as +x. then 5 rays so 7 total inputs
   // display best net from previous iteration
   // or best net currently?
+  // be able to change friction, acceleration etc parameters
 //   const model = tf.sequential();
 //   model.add(tf.layers.dense({units: 1, inputShape: [1]}));
 
@@ -120,11 +121,10 @@ export function CarDemo() {
     if (carModel != null)
     {
       carModel.update(inputVector.x, inputVector.y, delta);
+
+      if (env.offTrack(carModel.position))
+        carModel = new CarModel(env.origin);
     }
-    
-    // const pixel = ctx.getImageData(pos.x, pos.y, 1, 1).data;
-    // if (pixel[0] === 255 && pixel[1] === 255 && pixel[2] === 255)
-    //   pos = prevPos;
 
     env.drawCourse(ctx);
     drawCar(ctx, carModel);
@@ -133,13 +133,13 @@ export function CarDemo() {
 
   const canvasRef = useCanvas(draw)
 
-  const resetSize = () => { canvasRef.width = env.courseImage.width; canvasRef.height = env.courseImage.height; };
-  if (env.courseImage.complete)
-    resetSize();
-  else env.on('onFindOrigin', resetSize);
+  // const resetSize = () => { canvasRef.width = env.courseImage.width; canvasRef.height = env.courseImage.height; };
+  // if (env.courseImage.complete)
+  //   resetSize();
+  // else env.on('onFindOrigin', resetSize);
   
   return <div>
     {/* <button onClick={() => setResetKey(resetKey + 1)}>Reset</button> */}
-    <canvas ref={canvasRef} key={resetKey} width={800} height={400}/>
+    <canvas ref={canvasRef} key={resetKey} width={COURSE_IMAGE_WIDTH} height={COURSE_IMAGE_HEIGHT}/>
   </div>;
 }
