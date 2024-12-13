@@ -1,8 +1,11 @@
-import { Vector2 } from "../Vector2";
+import { Vector2, vectorFromAngle } from "../Vector2";
 import { EventEmitter } from 'events'
 
 export const COURSE_IMAGE_WIDTH = 850;
 export const COURSE_IMAGE_HEIGHT = 450;
+
+const DEFAULT_RAYCAST_DISTANCE = 800;
+const DEFAULT_RAYCAST_SPACING = 3;
 
 export class CarEnvironment extends EventEmitter {
     constructor(courseFileName) {
@@ -69,6 +72,28 @@ export class CarEnvironment extends EventEmitter {
                 context.fillRect(this.origin.x, this.origin.y, 1, 1);
             }
         }
+    }
+
+    /**
+     * Perform a raycast within the course environment.
+     * @param {Vector2} origin The origin of the raycast.
+     * @param {number} angle The angle of the raycast from the horizontal.
+     * @param {number} distance The maximum distance limit of the raycast.
+     * @param {number} spacing How many pixels to jump each iteration of the raycast.
+     * @returns Distance in pixels to a wall in a direction from origin.
+     */
+    raycast(origin, angle, distance = DEFAULT_RAYCAST_DISTANCE, spacing = DEFAULT_RAYCAST_SPACING) {
+        // Itercasting
+        // TODO: Optimize
+        let currDist = 0;
+        let direction = vectorFromAngle(angle);
+        while (currDist < distance) {
+            currDist += spacing;
+            let curr = origin.add(direction.multiply(currDist));
+            if (this.offTrack(curr))
+                return currDist;
+        }
+        return distance;
     }
 
     /**

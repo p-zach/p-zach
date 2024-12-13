@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react'
-import * as tf from '@tensorflow/tfjs';
 import { useCanvas } from './components/useCanvas';
 import { CarEnvironment, COURSE_IMAGE_WIDTH, COURSE_IMAGE_HEIGHT } from './models/car/CarEnvironment';
 import { CarModel } from './models/car/CarModel';
-import { Vector2 } from './models/Vector2';
+import { Vector2, vectorFromAngle } from './models/Vector2';
 
 export function CarDemo() {
   const [resetKey, setResetKey] = useState(0);
@@ -12,28 +11,16 @@ export function CarDemo() {
   // display best net from previous iteration
   // or best net currently?
   // be able to change friction, acceleration etc parameters
-//   const model = tf.sequential();
-//   model.add(tf.layers.dense({units: 1, inputShape: [1]}));
 
-//   model.compile({loss: 'meanSquaredError', optimizer: 'sgd'});
-
-//   // Generate some synthetic data for training.
-//   const xs = tf.tensor2d([1, 2, 3, 4], [4, 1]);
-//   const ys = tf.tensor2d([1, 3, 5, 7], [4, 1]);
-
-//   // Train the model using the data.
-//   model.fit(xs, ys, {epochs: 10}).then(() => {
-//     // Use the model to do inference on a data point the model hasn't seen before:
-//     model.predict(tf.tensor2d([5], [1, 1])).print();
-//     // Open the browser devtools to see the output
-//   });
-
-  // let pos = {x: 100, y: 100};
-  // let speed = 3;
+  const NUM_CARS = 10;
+  let cars = [];
   
   let env = new CarEnvironment('/course1.png');
-  let carModel = null;
-  env.on('onFindOrigin', () => { carModel = new CarModel(env.origin); })  
+  env.on('onFindOrigin', () => { 
+    for (let i = 0; i < NUM_CARS; i++) {
+      cars.push(new CarModel(env.origin, [5, 5], true));
+    }
+  });  
 
   const carImage = new Image();
   carImage.crossOrigin = 'Anonymous';
@@ -101,6 +88,7 @@ export function CarDemo() {
   }
 
   const draw = (ctx, frameCount) => {
+    // Calculate delta time
     let currFrameTime = Date.now();
     let delta = (currFrameTime - prevFrameTime) / 1000;
     prevFrameTime = currFrameTime;
@@ -108,35 +96,33 @@ export function CarDemo() {
     // Clear canvas
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     
-    let inputVector = Vector2.zero();
-    if (keysDown[0])
-      inputVector.x += 1;
-    if (keysDown[1])
-      inputVector.x -= 1;
-    if (keysDown[2])
-      inputVector.y -= 1;
-    if (keysDown[3])
-      inputVector.y += 1;
+    // let inputVector = Vector2.zero();
+    // if (keysDown[0])
+    //   inputVector.x += 1;
+    // if (keysDown[1])
+    //   inputVector.x -= 1;
+    // if (keysDown[2])
+    //   inputVector.y -= 1;
+    // if (keysDown[3])
+    //   inputVector.y += 1;
 
-    if (carModel != null)
-    {
-      carModel.update(inputVector.x, inputVector.y, delta);
-
-      if (env.offTrack(carModel.position))
-        carModel = new CarModel(env.origin);
-    }
-
+    // Draw course
     env.drawCourse(ctx);
-    drawCar(ctx, carModel);
 
+    // Update the car models
+    for (let i = 0; i < cars.length; i++)
+    {
+        // carModel.update(inputVector.x, inputVector.y, delta);
+        cars[i].updateFromModel(delta, env);
+  
+        if (env.offTrack(cars[i].position))
+          cars[i].reset(env.origin);
+        
+        drawCar(ctx, cars[i]);
+    }
   }
 
   const canvasRef = useCanvas(draw)
-
-  // const resetSize = () => { canvasRef.width = env.courseImage.width; canvasRef.height = env.courseImage.height; };
-  // if (env.courseImage.complete)
-  //   resetSize();
-  // else env.on('onFindOrigin', resetSize);
   
   return <div>
     {/* <button onClick={() => setResetKey(resetKey + 1)}>Reset</button> */}
