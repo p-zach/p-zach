@@ -4,21 +4,43 @@ import * as tf from '@tensorflow/tfjs';
 const SPEED_MAX = 15000;
 
 const ACCEL_BACKWARD = 200;
-const ACCEL_FORWARD = 300;
+const ACCEL_FORWARD_BASE = 50;
+const ACCEL_FORWARD_MAX = 300;
 
-const TURN_SCALAR = 5;
+const TURN_SCALAR = 2;
 
-const FRICTION_STRENGTH = 400;
+const FRICTION_STRENGTH = 200;
 const FRICTION_PARALLEL = 0.05;
 const FRICTION_PERPENDICULAR = 0.7;
 
 const INPUT_LAYER_SIZE = 7;
 const OUTPUT_LAYER_SIZE = 2;
 
+const FORWARD_COST = 5;
+const TURN_COST = -1;
+const DEATH_COST = -1000;
+
 export class CarModel {
     constructor(origin, hiddenLayers, initRandom = false) {
         this.reset(origin);
 
+        this.initModel(hiddenLayers, initRandom);
+    }
+    
+    reset(origin) {
+        this.position = Vector2.copy(origin);
+        this.previousPosition = Vector2.copy(origin);
+        // Velocity is the direction in which the car is currently moving.
+        this.velocity = new Vector2(0, 0);
+        // Heading is the direction in which the car is currently pointing.
+        // Velocity != heading allows for drifting.
+        this.heading = 0;
+
+        this.dead = false;
+        this.reward = 0;
+    }
+
+    initModel(hiddenLayers, initRandom = false) {
         // Initialize values
         const initializer = initRandom ? tf.initializers.glorotNormal() : tf.initializers.constant({ value: 0 });
 
@@ -32,7 +54,7 @@ export class CarModel {
         }));
 
         // Create hidden layers
-        for (let i = 1; i < hiddenLayers.length - 1; i++) {
+        for (let i = 1; i < hiddenLayers.length; i++) {
             this.model.add(tf.layers.dense({
                 units: hiddenLayers[i],
                 kernelInitializer: initializer, 
@@ -50,18 +72,16 @@ export class CarModel {
         // Compile model
         this.model.compile({optimizer: 'sgd', loss: 'meanSquaredError'});
     }
-    
-    reset(origin) {
-        this.position = Vector2.copy(origin);
-        this.previousPosition = Vector2.copy(origin);
-        // Velocity is the direction in which the car is currently moving.
-        this.velocity = new Vector2(0, 0);
-        // Heading is the direction in which the car is currently pointing.
-        // Velocity != heading allows for drifting.
-        this.heading = 0;
+
+    kill() {
+        this.dead = true;
+        this.reward += DEATH_COST;
     }
 
     updateFromModel(delta, env) {
+        if (this.dead)
+            return;
+
         // Inputs 1-2
         // Transform global car velocity to local where heading is +x
         const headingVector = vectorFromAngle(this.heading);
@@ -83,12 +103,12 @@ export class CarModel {
         let pred = this.model.predict(tf.tensor2d([headingComponent, perpHeadingComponent, results[0], results[1], results[2], results[3], results[4]], [1, 7])).dataSync();
     
         // Input and update
-        this.update(pred[0] * 2 - 1, pred[1] * 2 - 1, delta);
+        this.update(pred[0], pred[1] * 2 - 1, delta);
     }
 
     /**
      * Update the car based on input from a controller.
-     * @param {number} forward The amount to accelerate. Range: [0, 1]
+     * @param {number} forward The amount to accelerate. Range: [-1, 1]
      * @param {number} turn The amount to turn. Range: [-1, 1]
      * @param {number} delta The time in seconds since the last frame.
      */
@@ -96,7 +116,11 @@ export class CarModel {
         this.accelerate(forward, turn, delta);
 
         this.previousPosition = Vector2.copy(this.position);
-        this.position = this.position.add(this.velocity.multiply(delta));
+        let deltaX = this.velocity.multiply(delta);
+        this.position = this.position.add(deltaX);
+
+        this.reward += forward * FORWARD_COST;
+        // this.reward += Math.abs(turn) * TURN_COST;
     }
 
     /**
@@ -107,7 +131,8 @@ export class CarModel {
      */
     accelerate(forward, turn, delta) {
         // Scale inputs by constants
-        let scaledForward = forward > 0 ? ACCEL_FORWARD * forward : ACCEL_BACKWARD * forward;
+        // let scaledForward = forward > 0 ? ACCEL_FORWARD * forward : ACCEL_BACKWARD * forward;
+        let scaledForward = forward * ACCEL_FORWARD_MAX + ACCEL_FORWARD_BASE;
         let scaledTurn = turn * TURN_SCALAR;
 
         let direction = vectorFromAngle(this.heading);
